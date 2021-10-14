@@ -5294,41 +5294,56 @@ void os::make_polling_page_readable(void) {
   }
 };
 
-static int os_cpu_count(const cpu_set_t* cpus) {
-  int count = 0;
-  // only look up to the number of configured processors
-  for (int i = 0; i < os::processor_count(); i++) {
-    if (CPU_ISSET(i, cpus)) {
-      count++;
-    }
-  }
-  return count;
-}
-
 // Get the current number of available processors for this process.
 // This value can change at any time during a process's lifetime.
 // sched_getaffinity gives an accurate answer as it accounts for cpusets.
+// If it appears there may be more than 1024 processors then we do a
+// dynamic check - see 6515172 for details.
 // If anything goes wrong we fallback to returning the number of online
 // processors - which can be greater than the number available to the process.
 int os::Linux::active_processor_count() {
   cpu_set_t cpus;  // can represent at most 1024 (CPU_SETSIZE) processors
+  cpu_set_t* cpus_p = &cpus;
   int cpus_size = sizeof(cpu_set_t);
+
+  int configured_cpus = processor_count();  // upper bound on available cpus
   int cpu_count = 0;
 
+  // To enable easy testing of the dynamic path on different platforms we
+  // introduce a diagnostic flag: UseCpuAllocPath
+  if (configured_cpus >= CPU_SETSIZE || UseCpuAllocPath) {
+    // kernel may use a mask bigger than cpu_set_t
+    cpus_p = CPU_ALLOC(configured_cpus);
+    if (cpus_p != NULL) {
+      cpus_size = CPU_ALLOC_SIZE(configured_cpus);
+      // zero it just to be safe
+      CPU_ZERO_S(cpus_size, cpus_p);
+    }
+    else {
+       // failed to allocate so fallback to online cpus
+       int online_cpus = ::sysconf(_SC_NPROCESSORS_ONLN);
+       return online_cpus;
+    }
+  }
+
   // pid 0 means the current thread - which we have to assume represents the process
-  if (sched_getaffinity(0, cpus_size, &cpus) == 0) {
-    cpu_count = os_cpu_count(&cpus);
-    if (PrintActiveCpus) {
-      tty->print_cr("active_processor_count: sched_getaffinity processor count: %d", cpu_count);
+  if (sched_getaffinity(0, cpus_size, cpus_p) == 0) {
+    if (cpus_p != &cpus) {
+      cpu_count = CPU_COUNT_S(cpus_size, cpus_p);
+    }
+    else {
+      cpu_count = CPU_COUNT(cpus_p);
     }
   }
   else {
     cpu_count = ::sysconf(_SC_NPROCESSORS_ONLN);
-    warning("sched_getaffinity failed (%s)- using online processor count (%d) "
-            "which may exceed available processors", strerror(errno), cpu_count);
   }
 
-  assert(cpu_count > 0 && cpu_count <= os::processor_count(), "sanity check");
+  if (cpus_p != &cpus) {
+    CPU_FREE(cpus_p);
+  }
+
+  assert(cpu_count > 0 && cpu_count <= processor_count(), "sanity check");
   return cpu_count;
 }
 

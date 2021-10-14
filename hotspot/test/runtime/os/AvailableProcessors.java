@@ -21,8 +21,8 @@
  * questions.
  */
 import java.io.File;
-import com.oracle.java.testlibrary.ProcessTools;
-import com.oracle.java.testlibrary.OutputAnalyzer;
+import jdk.test.lib.ProcessTools;
+import jdk.test.lib.OutputAnalyzer;
 import java.util.ArrayList;
 
 /*
@@ -31,14 +31,14 @@ import java.util.ArrayList;
  * @summary Check that availableProcessors reports the correct value when running in a cpuset on linux
  * @requires os.family == "linux"
  * @library /testlibrary
- * @build com.oracle.java.testlibrary.*
+ * @build jdk.test.lib.*
  * @run driver AvailableProcessors
  */
 public class AvailableProcessors {
 
     static final String SUCCESS_STRING = "Found expected processors: ";
 
-    public static void main(String[] args) throws Throwable {
+    public static void main(String[] args) throws Exception {
         if (args.length > 0)
             checkProcessors(Integer.parseInt(args[0]));
         else {
@@ -67,8 +67,7 @@ public class AvailableProcessors {
             // Enable logging for easier failure diagnosis
             ProcessBuilder master =
                     ProcessTools.createJavaProcessBuilder(false,
-                                                          "-XX:+UnlockDiagnosticVMOptions",
-                                                          "-XX:+PrintActiveCpus",
+                                                          "-Xlog:os=trace",
                                                           "AvailableProcessors");
 
             int[] expected = new int[] { 1, available/2, available-1, available };
