@@ -99,7 +99,8 @@ ifneq ($(OPENJDK_TARGET_OS), solaris)
   EXCLUDES += com/oracle/security
 endif
 
-EXFILES += WrapperGenerator.java
+EXFILES += sun/awt/x11/generator/WrapperGenerator.java
+EXFILES += sun/awt/org/xml/generator/WrapperGenerator.java
 
 ifneq ($(OPENJDK_TARGET_OS), windows)
   # Exclude Window security related files in src/share/classes
